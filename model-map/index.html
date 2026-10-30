@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><title>使用中のモデルとLoRA</title>
+<style>
+*{box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{margin:0;background:#12141c;color:#eef1f8;font-family:"Noto Sans CJK JP","Noto Sans JP",sans-serif;padding:12px 20px;display:flex;flex-direction:column;gap:10px}
+header{display:flex;justify-content:space-between;align-items:baseline;flex:0 0 auto}
+h1{margin:0;font-size:28px}
+#upd{font-size:15px;color:#9aa3b8}
+#flow{display:flex;align-items:stretch;gap:0;flex:0 0 auto;min-width:0}
+.col{display:flex;flex-direction:column;justify-content:center;min-width:0}
+.col.fx{flex:0 0 190px}.col.lo{flex:1 1 0}
+.col.mo{flex:0 0 210px}
+.lgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.lgrid.one{grid-template-columns:minmax(0,1fr)}
+.box{border-radius:12px;padding:8px 12px;border:2px solid;min-width:0;overflow:hidden;flex:1}
+.box .t{font-size:13px;opacity:.85;font-weight:700}
+.box .n{font-size:18px;font-weight:900;margin:1px 0;line-height:1.2}
+.box .f{font-size:11px;opacity:.75;margin-bottom:2px;word-break:break-all}
+.box .d{font-size:13px;line-height:1.3}
+.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.lgrid.many .box{padding:6px 10px}.lgrid.many .n{font-size:15px}.lgrid.many .d,.lgrid.many .badge{font-size:11px}
+.model{background:#16335e;border-color:#4a90ff}
+.lora{background:#4a3410;border-color:#ffb02e}
+.vae{background:#0f4350;border-color:#3dd6f0}
+.out{background:#12401f;border-color:#4cd86a}
+.w{display:inline-block;background:#ffb02e;color:#1a1200;font-weight:900;font-size:15px;border-radius:7px;padding:0 8px;margin-right:6px}
+.badge{display:block;background:#7a2230;color:#ffd9de;border:1px solid #ff6b81;border-radius:8px;font-size:11px;padding:1px 8px;font-weight:700;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.arrow{font-size:28px;color:#7e89a6;padding:0 6px;align-self:center;flex:0 0 auto}
+.empty{color:#8a93aa;font-size:16px;border:2px dashed #555d75;border-radius:12px;padding:14px}
+section{margin-top:0}
+h2{font-size:16px;margin:0 0 5px;color:#c5cce0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:#1e2230;border:1px solid #343b52;border-radius:9px;padding:3px 10px;font-size:13px}
+.chip b{color:#fff;font-size:15px;margin-left:5px}
+.chip span{color:#9aa3b8}
+.gauge{height:18px;background:#1e2230;border:1px solid #343b52;border-radius:9px;overflow:hidden}
+.gauge div{height:100%;background:linear-gradient(90deg,#4a90ff,#3dd6f0)}
+.gl{font-size:14px;margin-top:3px;line-height:1.35}
+.gauge.low div{background:linear-gradient(90deg,#ff6b81,#ff3b57)}
+.gl.low{color:#ff9aa8}
+#low{display:flex;gap:20px;align-items:stretch;flex:1 1 0;min-height:0}
+#lowl{flex:0 0 400px;display:flex;flex-direction:column;gap:10px;min-height:0;overflow:hidden}
+#lowr{flex:1;min-width:0;display:flex;flex-direction:column;min-height:0}
+#lowr section{display:flex;flex-direction:column;flex:1;min-height:0}
+#gal{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;border:1px solid #343b52;border-radius:10px;padding:4px 12px;background:#161925}
+#gal details{margin:2px 0}
+#gal summary{cursor:pointer;font-size:16px;padding:2px 0}
+#gal summary .gd{color:#9aa3b8;font-size:13px;margin-left:8px}
+#gal summary .gc{color:#7e89a6;font-size:12px;margin-left:8px}
+#gal .fl{display:flex;flex-direction:column;padding:1px 0 5px 20px;gap:1px}
+#gal a{color:#8ec1ff;font-size:14px;text-decoration:none;cursor:pointer;word-break:break-all}
+#gal a:hover{text-decoration:underline}
+#gal a i{color:#7e89a6;font-style:normal;font-size:12px;margin-left:8px}
+#lb{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:99;cursor:zoom-out;flex-direction:row;align-items:center;justify-content:center;gap:16px;padding:12px 16px}
+#lb.on{display:flex}
+#lb .im{flex:1 1 0;min-width:0;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center}
+#lb img{max-width:100%;max-height:calc(100vh - 64px);object-fit:contain}
+#lb .cap{color:#c5cce0;font-size:16px;margin-top:8px;word-break:break-all}
+#lb .x{position:absolute;top:6px;right:18px;font-size:40px;color:#fff;line-height:1;z-index:2}
+#mp{flex:0 0 470px;max-width:55vw;height:100%;display:flex;flex-direction:column;gap:8px;background:#161925;border:1px solid #343b52;border-radius:12px;padding:10px 12px;cursor:default;min-height:0;font-size:13px}
+#mp.none{display:none}
+#mp h3{margin:0;font-size:15px;color:#c5cce0}
+#mp .chips{gap:5px}#mp .chip{font-size:12px;padding:2px 8px}#mp .chip b{font-size:13px}
+#mp .kv{font-size:12px;line-height:1.45;color:#c5cce0;word-break:break-all}#mp .kv b{color:#fff}
+#mp .pb{flex:1 1 0;min-height:0;display:flex;flex-direction:column}
+#mp .pb .hd{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#9aa3b8;margin-bottom:2px}
+#mp .pb button{background:#2a3350;color:#cfe0ff;border:1px solid #4a5a8a;border-radius:7px;font-size:11px;padding:1px 8px;cursor:pointer}
+#mp .pb button:hover{background:#3a4770}
+#mp .pt{flex:1;min-height:0;overflow-y:auto;background:#0f111a;border:1px solid #2b3148;border-radius:8px;padding:6px 8px;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;user-select:text}
+</style></head><body>
+<header><h1>使用中のモデルとLoRA</h1><div id="upd"></div></header>
+<div id="flow"></div>
+<div id="low"><div id="lowl"><section><h2>基本設定</h2><div class="chips" id="settings"></div></section>
+<section id="cnsec" style="display:none"><h2>ControlNet（ポーズ参照）</h2><div class="gl" id="cn"></div></section>
+<section><h2>ボリューム容量</h2><div class="gauge"><div id="gbar"></div></div><div class="gl" id="gl"></div></section>
+<section><h2>予算</h2><div class="gauge" id="bg"><div id="bbar"></div></div><div class="gl" id="bl"></div><div class="gl" id="brun"></div><div class="gl" id="bstore" style="opacity:.7;font-size:11px"></div></section>
+</div><div id="lowr"><section><h2>生成した画像の一覧<span id="gcount" style="font-size:13px;color:#7e89a6;margin-left:12px"></span></h2><div id="gal">読み込み中…</div></section>
+</div></div>
+<div id="lb"><span class="x">×</span><div class="im"><img id="lbi" alt=""><div class="cap" id="lbc"></div></div><div id="mp" class="none"></div></div>
+<script>
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const arrow='<div class="arrow">➜</div>';
+let last="";
+function tick(){const b=window.__budget,el=document.getElementById("brun");if(!el)return;
+  const run=(b&&b.running)||{},ids=Object.keys(run);
+  if(!ids.length){el.textContent="稼働中の Pod なし"+(b&&b.last_session?`（前回 $${Number(b.last_session.usd).toFixed(3)}・${b.last_session.minutes}分を記録済み）`:"");el.classList.remove("low");return}
+  const now=Date.now()/1000;let est=0,txt=[];
+  for(const k of ids){const r=run[k],h=Math.max(0,now-r.started)/3600,e=(Number(r.cost_per_hr)||0)*h;est+=e;
+    txt.push(`${k}: $${(Number(r.cost_per_hr)||0).toFixed(2)}/h × ${(h*60).toFixed(0)}分 ≈ $${e.toFixed(3)}（期限 ${new Date(r.deadline*1000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}）`)}
+  const rem=(Number(b.total_usd)||0)-(Number(b.used_usd)||0)-est;
+  el.textContent=`稼働中の見込み（未記録）: `+txt.join("／")+(rem<0?`／見込みで超過 $${(-rem).toFixed(3)}`:"");el.classList.toggle("low",rem<0)}
+setInterval(tick,5000);
+let CUR=null;
+async function loadCur(){try{const r=await fetch("current.json?t="+Date.now(),{cache:"no-store"});if(r.ok){const t=await r.text();const c=JSON.parse(t);if(JSON.stringify(c)!==JSON.stringify(CUR)){CUR=c;last=""}}}catch(e){}}
+function render(d){
+  d=JSON.parse(JSON.stringify(d));
+  if(CUR){ // 実際に送った Workflow (最後に完了したジョブ) を優先して表示
+    const byFile=Object.fromEntries((d.loras||[]).map(l=>[l.file,l]));
+    if(CUR.model&&CUR.model!==d.model.file)d.model={file:CUR.model,name:CUR.model,desc:"(最後の生成で使用)"};
+    if(CUR.vae&&CUR.vae!==(d.vae||{}).file)d.vae={file:CUR.vae,name:CUR.vae,desc:"(最後の生成で使用)"};
+    d.loras=(CUR.loras||[]).map(l=>Object.assign({name:l.name,file:l.name,role:"",size:"",license:""},byFile[l.name]||{},{status:"使用中",weight:l.model}));
+    const s=CUR.settings||{};d.settings={steps:s.steps,cfg:s.cfg,sampler:s.sampler,seed:s.seed,size:s.size};
+    d.output=Object.assign({},d.output||{},{desc:`最後の生成 ${CUR.time||""}`});
+  }
+  const m=d.model,v=d.vae,o=d.output||{label:"出力画像",desc:""};
+  const active=(d.loras||[]).filter(l=>l.status==="使用中");
+  const many=active.length>2?" many":"";
+  const lb=active.map(l=>`<div class="box lora" title="${esc(l.name)}｜${esc(l.file)}｜${esc(l.role)}｜${esc(l.size)}｜${esc(l.license)}"><div class="t">LoRA（${esc(l.status)}）</div><div class="n clamp">${esc(l.name)}</div><div class="f">${esc(l.file)}</div><div class="d"><span class="w">weight ${esc(l.weight)}</span>${esc(l.role)}</div><div class="f" style="margin-top:3px">${esc(l.size)}</div><span class="badge">${esc(l.license)}</span></div>`).join("");
+  const loras=active.length?`<div class="lgrid${active.length===1?" one":""}${many}">${lb}</div>`:'<div class="empty">LoRAなし</div>';
+  document.getElementById("flow").innerHTML=
+   `<div class="col mo"><div class="box model"><div class="t">モデル</div><div class="n">${esc(m.name||m.file)}</div><div class="f">${esc(m.file)}</div><div class="d">${esc(m.desc)}</div></div></div>${arrow}`+
+   `<div class="col lo">${loras}</div>${arrow}`+
+   `<div class="col fx"><div class="box vae"><div class="t">VAE</div><div class="n">${esc(v.name||v.file)}</div><div class="f">${esc(v.file)}</div><div class="d">${esc(v.desc)}</div></div></div>${arrow}`+
+   `<div class="col fx"><div class="box out"><div class="t">出力</div><div class="n">${esc(o.label)}</div><div class="d">${esc(o.desc)}</div></div></div>`;
+  const s=d.settings||{};
+  document.getElementById("settings").innerHTML=[["steps",s.steps],["CFG",s.cfg],["サンプラー",s.sampler],["seed",s.seed],["サイズ",s.size]].map(([k,x])=>`<div class="chip"><span>${k}</span><b>${esc(x)}</b></div>`).join("");
+  const cns=d.controlnets||[];
+  document.getElementById("cnsec").style.display=cns.length?"":"none";
+  document.getElementById("cn").innerHTML=cns.map(c=>`<b>${esc(c.name)}</b>（${esc(c.role)}／${esc(c.size)}／${esc(c.license)}）<br><span style="opacity:.7;font-size:11px;word-break:break-all">${esc(c.file)}</span>`).join("<br>");
+  const vo=d.volume||{},used=Math.max(0,vo.total_gb-vo.free_gb);
+  document.getElementById("gbar").style.width=(used/vo.total_gb*100)+"%";
+  document.getElementById("gl").textContent=`使用 約${used.toFixed(1)}GB ／ 全体 ${vo.total_gb}GB（空き ${vo.free_label||vo.free_gb+"GB"}）`;
+  const b=d.budget;
+  if(b){const tot=Number(b.total_usd)||0,u=Math.max(0,Number(b.used_usd)||0),rem=tot-u,over=rem<0,low=over||rem<0.10;
+    document.getElementById("bbar").style.width=(tot?Math.min(100,u/tot*100):0)+"%";
+    document.getElementById("bg").classList.toggle("low",low);
+    const bl=document.getElementById("bl");bl.classList.toggle("low",low);
+    bl.textContent=`記録済み: 予算 $${tot.toFixed(2)} のうち使用 $${u.toFixed(3)}／`+(over?`超過 $${(-rem).toFixed(3)}（予算オーバー）`:`残り $${rem.toFixed(3)}`+(low?"（残りわずか）":""));}
+  window.__budget=b||null;tick();
+  document.getElementById("bstore").textContent=(d.storage&&d.storage.note)||"ボリューム月額・ディスク代は含まない";
+  document.getElementById("upd").textContent="更新: "+(d.updated||"");
+}
+async function load(){
+  await loadCur();
+  try{const t=await (await fetch("models.json?t="+Date.now(),{cache:"no-store"})).text();
+    if(t!==last){last=t;render(JSON.parse(t));}}catch(e){document.getElementById("upd").textContent="読み込みエラー: "+e.message}
+}
+load();setInterval(load,5000);
+
+const metaMap={};const openSet=new Set();let lastImg="";
+function renderGal(d){
+  const gs=d.groups||[];let n=0;
+  document.getElementById("gal").innerHTML=gs.map((g,i)=>{n+=g.files.length;
+    const key=g.folder,op=openSet.has(key)||(openSet.size===0&&!window.__init&&i===0)?" open":"";
+    return `<details data-k="${esc(key)}"${op}><summary>${esc(g.folder)}<span class="gd">${esc(g.desc)}</span><span class="gc">${g.files.length}枚</span></summary><div class="fl">`+
+      g.files.map(f=>{metaMap[f.path]=f.meta||null;return `<a data-src="${esc(encodeURI(f.path))}" data-n="${esc(g.folder+"/"+f.name)}">${esc(f.name)}<i>${esc(f.time)}</i></a>`}).join("")+`</div></details>`}).join("")||"画像なし";
+  document.getElementById("gcount").textContent=`（${gs.length}フォルダ／${n}枚）`;
+  window.__init=true;
+}
+document.getElementById("gal").addEventListener("toggle",e=>{const k=e.target.dataset&&e.target.dataset.k;if(k===undefined)return;e.target.open?openSet.add(k):openSet.delete(k)},true);
+function showMeta(path){
+  const mp=document.getElementById("mp"),m=metaMap[path];
+  if(!m){mp.className="none";mp.innerHTML="";return}
+  mp.className="";
+  const chip=(k,v)=>v==null||v===""?"":`<div class="chip"><span>${k}</span><b>${esc(v)}</b></div>`;
+  const lo=(m.loras||[]).map(l=>`${esc(l.name)} <b>${esc(l.model)}</b>`+(l.clip!==l.model?`（clip ${esc(l.clip)}）`:"")).join("<br>")||"なし";
+  const blk=(id,t,x)=>x?`<div class="pb"><div class="hd"><span>${t}</span><button data-copy="${id}">コピー</button></div><div class="pt" id="${id}">${esc(x)}</div></div>`:"";
+  mp.innerHTML=`<h3>生成設定</h3><div class="chips">${chip("seed",m.seed)}${chip("steps",m.steps)}${chip("CFG",m.cfg)}${chip("サンプラー",m.sampler)}${chip("スケジューラ",m.scheduler)}${chip("サイズ",m.size)}${m.denoise!=null&&m.denoise!==1?chip("denoise",m.denoise):""}</div>`+
+   `<div class="kv"><b>モデル</b> ${esc(m.model||"-")}<br><b>VAE</b> ${esc(m.vae||"-")}<br><b>LoRA</b> ${lo}`+(m.note?`<br><b>依頼</b> ${esc(m.note)}`:"")+(m.parent?`<br><b>元画像</b> ${esc(m.parent)}`:"")+`</div>`+
+   blk("pp","ポジティブプロンプト",m.positive)+blk("pn","ネガティブプロンプト",m.negative);
+}
+document.getElementById("mp").addEventListener("click",e=>{e.stopPropagation();const b=e.target.closest("button[data-copy]");if(!b)return;
+  const t=document.getElementById(b.dataset.copy).textContent;
+  const done=()=>{b.textContent="コピーしました";setTimeout(()=>b.textContent="コピー",1500)};
+  if(navigator.clipboard&&window.isSecureContext)navigator.clipboard.writeText(t).then(done,()=>fb(t,done));else fb(t,done)});
+function fb(t,done){const ta=document.createElement("textarea");ta.value=t;ta.style.position="fixed";ta.style.opacity="0";document.body.appendChild(ta);ta.select();try{document.execCommand("copy");done()}catch(e){}ta.remove()}
+document.getElementById("gal").addEventListener("click",e=>{const a=e.target.closest("a[data-src]");if(!a)return;
+  const src=a.dataset.src;showMeta(decodeURI(src));
+  document.getElementById("lbi").src=src;document.getElementById("lbc").textContent=a.dataset.n;document.getElementById("lb").classList.add("on")});
+document.getElementById("lb").addEventListener("click",()=>{document.getElementById("lb").classList.remove("on");document.getElementById("lbi").src=""});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")document.getElementById("lb").click()});
+async function loadImg(){
+  try{const t=await (await fetch("images.json?t="+Date.now(),{cache:"no-store"})).text();
+    if(t!==lastImg){lastImg=t;renderGal(JSON.parse(t));}}catch(e){document.getElementById("gal").textContent="画像一覧の読み込みエラー: "+e.message}
+}
+loadImg();setInterval(loadImg,30000);
+</script></body></html>

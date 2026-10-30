@@ -1,0 +1,21 @@
+{
+  "network_volume_id": "",
+  "data_center_id": "",
+  "gpu_candidates": ["NVIDIA RTX A5000", "NVIDIA A40"],
+  "max_hourly_usd": 0.8,
+  "max_session_minutes": 60,
+  "container_disk_gb": 30,
+  "image": "runpod/comfyui:cuda12.8",
+  "ssh_key": "~/.ssh/comfylab_ed25519",
+  "checkpoint": "",
+  "checkpoint_url": "",
+  "checkpoint_size": "",
+  "checkpoint_sha256": "",
+  "checkpoint_page": "",
+  "vae": "sdxl_vae.safetensors",
+  "vae_url": "",
+  "vae_size": "",
+  "vae_sha256": "",
+  "loras": [],
+  "storage_note": ""
+}

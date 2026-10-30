@@ -1,0 +1,39 @@
+{
+ "model": {
+  "file": "(未設定)",
+  "name": "モデル未設定",
+  "desc": "初回設定で記入"
+ },
+ "vae": {
+  "file": "sdxl_vae.safetensors",
+  "name": "SDXL VAE",
+  "desc": "色と細部を仕上げる"
+ },
+ "loras": [],
+ "settings": {
+  "steps": 28,
+  "cfg": 5.5,
+  "sampler": "euler",
+  "seed": "",
+  "size": "1024x1024"
+ },
+ "volume": {
+  "total_gb": 0,
+  "free_gb": 0,
+  "free_label": "未計測"
+ },
+ "output": {
+  "label": "出力画像",
+  "desc": ""
+ },
+ "updated": "",
+ "budget": {
+  "total_usd": 0,
+  "used_usd": 0,
+  "running": {}
+ },
+ "controlnets": [],
+ "storage": {
+  "note": "ネットワークボリュームの月額とPodディスク代は、この予算に含まれない (Runpod の料金ページ・請求で確認)"
+ }
+}
