@@ -62,6 +62,8 @@ def job_meta(j):
     try: g = json.load(open(j["workflow_sent"], encoding="utf-8"))
     except Exception: pass
     m = dict(graph_meta(g) or {}) if g else {}
+    if j.get("gen_status") == "error" or j.get("status") == "error":
+        m["gen_error"] = "生成エラーあり (完成分のみ回収)"
     for k in ("note", "parent", "job_id", "prompt_id", "seed"):
         if j.get(k) not in (None, ""): m[k] = j[k]
     return m

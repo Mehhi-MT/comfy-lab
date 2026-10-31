@@ -10,6 +10,7 @@ import json
 import os
 import re
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -31,13 +32,31 @@ def is_hf(url):
     return u.scheme == "https" and (u.hostname or "").lower() in ("huggingface.co", "hf.co")
 
 
+class FetchError(SystemExit):
+    pass
+
+
+def fail(url, code):
+    hint = {401: "認証が必要/トークンが無効", 403: "アクセス拒否 (制限付きモデル・規約同意が必要など)", 404: "見つからない"}.get(code)
+    if hint is None and code and code >= 500:
+        hint = "配布元のサーバーエラー。時間をおいて再実行"
+    raise FetchError(f"取得失敗 HTTP {code}: {hint or '想定外の応答'} ({urllib.parse.urlsplit(url).hostname})")
+
+
 def get_json(url):
     h = {"User-Agent": UA}
     tok = os.environ.get("CIVITAI_TOKEN")
     if tok and is_civitai(url):
         h["Authorization"] = f"Bearer {tok}"
-    with urllib.request.urlopen(urllib.request.Request(url, headers=h), timeout=30) as r:
-        return json.loads(r.read())
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=h), timeout=30) as r:
+            if r.status != 200:
+                fail(url, r.status)
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        fail(url, e.code)
+    except (urllib.error.URLError, OSError) as e:
+        raise FetchError(f"接続失敗: {getattr(e, 'reason', e)}")
 
 
 def civitai(url):
@@ -78,9 +97,13 @@ def huggingface(url):
     op = urllib.request.build_opener(NoRedirect)
     try:
         r = op.open(urllib.request.Request(url, method="HEAD", headers={"User-Agent": UA}), timeout=30)
-        hd = r.headers
+        code, hd = r.status, r.headers
     except urllib.error.HTTPError as e:
-        hd = e.headers
+        code, hd = e.code, e.headers
+    except (urllib.error.URLError, OSError) as e:
+        raise FetchError(f"接続失敗: {getattr(e, 'reason', e)}")
+    if not (200 <= code < 300 or code in (301, 302, 303, 307, 308)):  # 転送 (LFS の実体) は成功扱い。401/403/404/5xx は失敗
+        fail(url, code)
     etag = (hd.get("X-Linked-ETag") or hd.get("ETag") or "").strip('"')
     size = hd.get("X-Linked-Size") or hd.get("Content-Length")
     return {"file": os.path.basename(urllib.parse.urlsplit(url).path), "url": url, "size": int(size) if size else None, "size_exact": True,

@@ -11,7 +11,7 @@ step() { echo "== $*"; }
 
 step "前提の確認"
 command -v python3 >/dev/null || fail "python3 がありません"
-python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' || fail "python3 3.9 以上が必要です ($(python3 -V 2>&1))"
+python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' || fail "python3 3.11 以上が必要です ($(python3 -V 2>&1))"
 python3 -c 'import venv, ensurepip' 2>/dev/null || fail "python3 の venv/ensurepip がありません (例: apt install python3-venv)"
 command -v curl >/dev/null || fail "curl がありません"
 
@@ -70,7 +70,7 @@ cd "$TARGET"
 sha256sum --quiet -c MANIFEST.sha256 || fail "導入先のコードが MANIFEST.sha256 と一致しません"
 PY="$TARGET/.venv/bin/python"
 "$PY" -m py_compile runpod/runpod_pod.py runpod/pod_ssh.py runpod/model_info.py runpod/comfy_run.py model-map/gen-index.py model-map/update_models.py
-bash -n runpod/pod_setup.sh && bash -n model-map/start-desktop.sh && bash -n install.sh
+bash -n runpod/pod_setup.sh && bash -n model-map/start-desktop.sh && bash -n model-map/stop-desktop.sh && bash -n model-map/desktop_lib.sh && bash -n install.sh
 for j in runpod/workflow-api.base.json runpod/workflow-api.lora1.json runpod/workflow-api.lora2.json config.json model-map/models.json; do
   "$PY" -c 'import json,sys; json.load(open(sys.argv[1]))' "$j" || fail "JSON が読めません: $j"
 done

@@ -22,6 +22,13 @@ class State:
         self.prompts = {}       # prompt_id -> {"wf":..., "polls":0}
         self.view_fail = 0
         self.prompt_fail_after_accept = 0
+        self.prompt_response = None # (HTTP code, body bytes) を POST /prompt の応答にする (受け付けない)
+        self.prompt_delay = 0       # POST /prompt の応答を遅らせる秒数 (受け付けたうえで)
+        self.history_fail = 0       # /history を N 回 500 にする
+        self.history_fn = None      # (pid, seed) -> entry を差し替え (None を返すと履歴なし)
+        self.list_omit = set()      # 一覧から常に隠す Pod id (一覧の取りこぼし)
+        self.delete_fail = 0        # DELETE を N 回 500 で失敗させる
+        self.get_fail = set()       # 個別取得を 500 にする Pod id
     def add_pod(self, name, cost=0.5, status="RUNNING"):
         pid = uuid.uuid4().hex[:12]
         self.pods[pid] = {"id": pid, "name": name, "status": status, "cost": cost, "gpu": {"id": "NVIDIA A40", "count": 1},
@@ -54,6 +61,7 @@ def make_handler(S):
             with S.lock:
                 if m == "GET" and path == "/v2/pods":
                     pods = list(S.pods.values())
+                    pods = [x for x in pods if x["id"] not in S.list_omit]
                     if S.hide_new_pod_lists > 0:
                         S.hide_new_pod_lists -= 1
                         pods = [x for x in pods if not x["name"].startswith("comfylab-")]
@@ -73,9 +81,14 @@ def make_handler(S):
                     return self._send(201, S.pods[pid])
                 mm = re.fullmatch(r"/v2/pods/([^/]+)", path)
                 if mm and m == "GET":
+                    if mm.group(1) in S.get_fail:
+                        return self._send(500, {"title": "err", "status": 500, "detail": "x"})
                     pod = S.pods.get(mm.group(1))
                     return self._send(200, pod) if pod else self._send(404, {"title": "Not Found", "status": 404, "detail": "x"})
                 if mm and m == "DELETE":
+                    if S.delete_fail > 0:
+                        S.delete_fail -= 1
+                        return self._send(500, {"title": "err", "status": 500, "detail": "x"})
                     if mm.group(1) in S.pods:
                         del S.pods[mm.group(1)]; return self._send(204)
                     return self._send(404, {"title": "Not Found", "status": 404, "detail": "x"})
@@ -90,19 +103,31 @@ def make_handler(S):
             path = p.split("?")[0]
             if path == "/system_stats": return self._send(200, {"system": {}})
             if m == "POST" and path == "/prompt":
+                if S.prompt_response:
+                    code, raw = S.prompt_response
+                    return self._send(code, raw=raw)
                 pid = body.get("prompt_id") or str(uuid.uuid4())
                 S.prompts[pid] = {"wf": body["prompt"], "polls": 0}
                 if S.prompt_fail_after_accept > 0:
                     S.prompt_fail_after_accept -= 1
                     self.close_connection = True
                     return  # 受け付けたが応答を返さない
-                return self._send(200, {"prompt_id": pid, "number": len(S.prompts), "node_errors": {}})
+                if S.prompt_delay:
+                    time.sleep(S.prompt_delay)
+                ne = getattr(S, "accept_node_errors", {})
+                return self._send(200, {"prompt_id": pid, "number": len(S.prompts), "node_errors": ne})
             mm = re.fullmatch(r"/history/(.+)", path)
             if mm:
+                if S.history_fail > 0:
+                    S.history_fail -= 1
+                    return self._send(500, {"error": "internal"})
                 pid = mm.group(1); pr = S.prompts.get(pid)
                 if not pr: return self._send(200, {})
                 pr["polls"] += 1
                 seed = pr["wf"]["3"]["inputs"]["seed"]
+                if S.history_fn:
+                    e = S.history_fn(pid, seed)
+                    return self._send(200, {pid: e} if e else {})
                 return self._send(200, {pid: {"status": {"status_str": "success", "completed": True},
                                               "outputs": {"9": {"images": [{"filename": f"img_{seed}_{pid[:6]}.png", "subfolder": "", "type": "output"}]}}}})
             if path == "/queue": return self._send(200, {"queue_running": [], "queue_pending": []})

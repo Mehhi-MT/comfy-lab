@@ -5,3 +5,4 @@ state/
 .venv/
 *.zip
 __pycache__/
+*.lock

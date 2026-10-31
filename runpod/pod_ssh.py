@@ -201,6 +201,7 @@ def tunnel_start(pod):
 WATCHDOG_SH = r'''#!/usr/bin/env bash
 # comfy-lab: 期限 (epoch) を過ぎたらこの Pod 自身を削除する。キーは PID1 の環境 (Pod 用キー) から読み、表示しない。
 DEADLINE="$1"; LOG=/root/comfylab-watchdog.log
+echo $$ > "$(dirname "$0")/comfylab_watchdog.pid"  # 停止・生存確認は この PID と /proc/PID/cmdline で行う
 envv() { tr '\0' '\n' < /proc/1/environ | sed -n "s/^$1=//p" | head -n1; }
 ID="${RUNPOD_POD_ID:-$(envv RUNPOD_POD_ID)}"; KEY="${RUNPOD_API_KEY:-$(envv RUNPOD_API_KEY)}"
 while [ "$(date +%s)" -lt "$DEADLINE" ]; do sleep 20; done
@@ -213,6 +214,24 @@ for i in 1 2 3 4 5; do
   sleep 30
 done
 '''
+
+
+def timer_ctl(action, deadline=None, d="/root"):
+    """Pod 内タイマーの停止・起動・生存確認 (bash)。pkill/pgrep の名前部分一致は使わない。
+    PID ファイルの PID について /proc/PID/cmdline が「bash <d>/comfylab_watchdog.sh <期限>」であることを確かめ、
+    この確認を実行しているシェル自身 ($$) とその親 ($PPID) は対象にしない。"""
+    s = (f'S={d}/comfylab_watchdog.sh; PF={d}/comfylab_watchdog.pid; '
+         'alive() { local p; p=$(cat "$PF" 2>/dev/null) || return 1; [[ "$p" =~ ^[0-9]+$ ]] || return 1; '
+         '[ "$p" != "$$" ] && [ "$p" != "$PPID" ] || return 1; local A=(); mapfile -d "" -t A < "/proc/$p/cmdline" 2>/dev/null || return 1; '
+         '[[ "${A[0]:-}" == bash || "${A[0]:-}" == */bash ]] && [ "${A[1]:-}" = "$S" ] && [[ "${A[2]:-}" =~ ^[0-9]+$ ]] || return 1; WPID=$p; }; ')
+    if action in ("stop", "restart"):
+        s += ('if alive; then kill "$WPID"; for i in 1 2 3 4 5 6 7 8 9 10; do alive || break; sleep 0.3; done; '
+              'alive && kill -9 "$WPID"; echo "Pod内タイマー: 停止 (pid $WPID)"; fi; rm -f "$PF"; ')
+    if action == "restart":
+        s += (f'chmod +x "$S"; nohup setsid "$S" {int(deadline)} >/dev/null 2>&1 < /dev/null & '
+              'for i in 1 2 3 4 5 6 7 8 9 10; do sleep 0.3; alive && break; done; ')
+    s += 'if alive; then echo "Pod内タイマー: 稼働中 (pid $WPID)"; else echo "Pod内タイマー: なし"; ' + ('exit 1; ' if action == "restart" else '') + 'fi'
+    return s
 
 
 def main():
@@ -256,14 +275,13 @@ def main():
             f.write(WATCHDOG_SH)
         s.close()
         c.close()
-        code, _ = run(pod, f"chmod +x /root/comfylab_watchdog.sh; pkill -f comfylab_watchdog.sh; "
-                           f"nohup setsid /root/comfylab_watchdog.sh {int(rec['deadline'])} >/dev/null 2>&1 & sleep 1; "
-                           f"pgrep -f comfylab_watchdog.sh >/dev/null && echo 'Pod内タイマー: 稼働中'")
+        code, _ = run(pod, timer_ctl("restart", int(rec["deadline"])))
         sys.exit(code)
     if cmd == "watchdog-check":
         sys.exit(run(pod, "for v in RUNPOD_POD_ID RUNPOD_API_KEY; do tr '\\0' '\\n' </proc/1/environ | grep -q \"^$v=.\" && echo \"$v: あり\" || echo \"$v: なし\"; done; "
-                          "command -v runpodctl >/dev/null && runpodctl version 2>&1 | head -1 || echo 'runpodctl: なし'; "
-                          "pgrep -f comfylab_watchdog.sh >/dev/null && echo 'Pod内タイマー: 稼働中' || echo 'Pod内タイマー: なし'")[0])
+                          "if command -v runpodctl >/dev/null; then echo \"runpodctl: $(runpodctl version 2>/dev/null | grep -iv 'config file' | head -1)\"; "
+                          "echo '(runpodctl の「config file not found」は、runpodctl にキーを保存していないという意味。Pod 内タイマーは Pod のキーを直接渡すので影響しない)'; "
+                          "else echo 'runpodctl: なし (Pod 内タイマーは REST API で削除する)'; fi; " + timer_ctl("check"))[0])
     if cmd == "pose-setup":
         sh = ("set -euo pipefail; R=$(dirname \"$(dirname \"$(find /workspace -maxdepth 5 -type d -path '*/models/checkpoints' | head -n1)\")\"); "
               "cd \"$R/custom_nodes\"; [ -d comfyui_controlnet_aux ] || git clone --depth 1 https://github.com/Fannovel16/comfyui_controlnet_aux.git; "
@@ -274,11 +292,8 @@ def main():
         parts = out.split()
         if code == 0 and len(parts) >= 4 and parts[1].isdigit():
             total, free = int(parts[1]) / 1e9, int(parts[3]) / 1e9
-            m = rp.load_json(rp.MODELS_JSON, None)
-            if m is not None:
-                m["volume"] = {"total_gb": round(total, 1), "free_gb": round(free, 2), "free_label": f"約{free:.1f}GB"}
-                m["updated"] = time.strftime("%Y-%m-%d %H:%M")
-                rp.save_json(rp.MODELS_JSON, m)
+            if os.path.exists(rp.MODELS_JSON):
+                rp.update_models(lambda m: m.__setitem__("volume", {"total_gb": round(total, 1), "free_gb": round(free, 2), "free_label": f"約{free:.1f}GB"}))
                 print(f"models.json の容量を更新: 全体 {total:.1f}GB / 空き {free:.1f}GB")
         sys.exit(code)
     sys.exit(__doc__)

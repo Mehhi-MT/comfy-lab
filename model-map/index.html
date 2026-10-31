@@ -157,7 +157,7 @@ function showMeta(path){
   const lo=(m.loras||[]).map(l=>`${esc(l.name)} <b>${esc(l.model)}</b>`+(l.clip!==l.model?`（clip ${esc(l.clip)}）`:"")).join("<br>")||"なし";
   const blk=(id,t,x)=>x?`<div class="pb"><div class="hd"><span>${t}</span><button data-copy="${id}">コピー</button></div><div class="pt" id="${id}">${esc(x)}</div></div>`:"";
   mp.innerHTML=`<h3>生成設定</h3><div class="chips">${chip("seed",m.seed)}${chip("steps",m.steps)}${chip("CFG",m.cfg)}${chip("サンプラー",m.sampler)}${chip("スケジューラ",m.scheduler)}${chip("サイズ",m.size)}${m.denoise!=null&&m.denoise!==1?chip("denoise",m.denoise):""}</div>`+
-   `<div class="kv"><b>モデル</b> ${esc(m.model||"-")}<br><b>VAE</b> ${esc(m.vae||"-")}<br><b>LoRA</b> ${lo}`+(m.note?`<br><b>依頼</b> ${esc(m.note)}`:"")+(m.parent?`<br><b>元画像</b> ${esc(m.parent)}`:"")+`</div>`+
+   `<div class="kv"><b>モデル</b> ${esc(m.model||"-")}<br><b>VAE</b> ${esc(m.vae||"-")}<br><b>LoRA</b> ${lo}`+(m.note?`<br><b>依頼</b> ${esc(m.note)}`:"")+(m.parent?`<br><b>元画像</b> ${esc(m.parent)}`:"")+(m.gen_error?`<br><b>状態</b> ${esc(m.gen_error)}`:"")+`</div>`+
    blk("pp","ポジティブプロンプト",m.positive)+blk("pn","ネガティブプロンプト",m.negative);
 }
 document.getElementById("mp").addEventListener("click",e=>{e.stopPropagation();const b=e.target.closest("button[data-copy]");if(!b)return;
